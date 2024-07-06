@@ -1,13 +1,13 @@
 # Omnidirectional car
 
-## Objetivos
+## Objectives
 
 
 ## Softwares  
 
 
-## Componentes
+## Components
 
 
-## Especificação 3D
+## 3D especification
 
