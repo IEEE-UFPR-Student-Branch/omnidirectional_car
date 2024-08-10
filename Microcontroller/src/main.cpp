@@ -37,28 +37,44 @@ struct Wheels {
  * @param wheel pins of wheel
  * @param speed speed between -100 and 100
  */
-void ControlWheel(Wheel wheel, int8_t speed) {
+void ControlWheel(Wheel wheel, float_t speed) {
   if (speed > 0) {
     digitalWrite(wheel.dirPin, HIGH);
   } else {
     digitalWrite(wheel.dirPin, LOW);
+    speed = -speed;
   }
 
-  analogWrite(wheel.pwmPin, map(speed, -100, 100, 0, 255));
+  // convert float [0, 100] to uint16_t
+  uint16_t pwmValue = trunc(speed * 655.35);
+  ledcWrite(wheel.pwmPin, pwmValue);
 }
 
 /**
  * @brief Calculate and apply control to wheels
  *
  * @param wheels struct with all wheels
- * @param speed speed between -100 and 100
- * @param angle angle of direction
+ * @param speed_x + speed_y between -100 and 100
  */
-void ControlCar(Wheels wheels, int8_t speed, float angle) {
-  ControlWheel(wheels.frontLeft, speed * cos(angle + PI / 4));
-  ControlWheel(wheels.frontRight, speed * cos(angle - PI / 4));
-  ControlWheel(wheels.rearLeft, speed * cos(angle + 3 * PI / 4));
-  ControlWheel(wheels.rearRight, speed * cos(angle - 3 * PI / 4));
+void ControlDir(Wheels wheels, float speed_x, float speed_y) {
+
+  ControlWheel(wheels.frontLeft, speed_x - speed_y);
+  ControlWheel(wheels.frontRight, speed_x + speed_y);
+  ControlWheel(wheels.rearLeft, speed_x + speed_y);
+  ControlWheel(wheels.rearRight, speed_x - speed_y);
+}
+
+/**
+ * @brief Control rotation the car
+ *
+ * @param wheels struct with all wheels
+ * @param speed_rot speed to ratate
+ */
+void ControlRot(Wheels wheels, float speed_rot) {
+  ControlWheel(wheels.frontLeft, -speed_rot);
+  ControlWheel(wheels.frontRight, speed_rot);
+  ControlWheel(wheels.rearLeft, -speed_rot);
+  ControlWheel(wheels.rearRight, speed_rot);
 }
 
 void setup() {
@@ -74,12 +90,19 @@ void setup() {
   pinMode(WHEEL_RL_PWM, OUTPUT);
   pinMode(LED, OUTPUT);
 
+  // Set mote resolution to PWM
+  ledcSetup(0, 20000, 16);
+  ledcSetup(1, 20000, 16);
+  ledcSetup(2, 20000, 16);
+  ledcSetup(3, 20000, 16);
+
   const Wheels wheels = {{WHEEL_FL_PWM, WHEEL_FL_DIR},
                          {WHEEL_FR_PWM, WHEEL_FR_DIR},
                          {WHEEL_RL_PWM, WHEEL_RL_DIR},
                          {WHEEL_RR_PWM, WHEEL_RR_DIR}};
 
-  ControlCar(wheels, 0, 0);
+  ControlDir(wheels, 0, 0);
+  ControlRot(wheels, 0);
 
   // Start serial
   Serial.begin(115200);
