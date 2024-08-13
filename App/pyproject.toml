@@ -1,14 +1,26 @@
 [tool.poetry]
 name = "omnidirectional-car"
 version = "0.1.0"
-description = ""
-authors = ["Zappani <lucas.zappani@ufpr.br>"]
+description = "App to control omnidirectional car"
+authors = [
+  "Zappani <lucas.zappani@ufpr.br>",
+  "Marcio Bulla <marciobulla@ufpr.br>",
+]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = ">=3.9,<3.13"
 kivy = "^2.3.0"
+kivy-garden = "^0.1.5"
+asyncio = "^3.4.3"
+bleak = "^0.22.2"
 
+
+[tool.poetry.group.dev.dependencies]
+pylint = "^3.2.5"
+pytest = "^8.2.2"
+buildozer = "^1.5.0"
+cython = "^3.0.10"
 
 [build-system]
 requires = ["poetry-core"]
