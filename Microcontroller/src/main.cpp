@@ -1,22 +1,26 @@
+#include "NimBLECharacteristic.h"
 #include "NimBLEDevice.h"
 #include <Arduino.h>
-
 // Defining the pins to control the wheels
 
 // Front Left wheel
-const uint8_t WHEEL_FL_PWM = 5;
-const uint8_t WHEEL_FL_DIR = 6;
+const uint8_t WHEEL_FL_PWM = 4;
+const uint8_t WHEEL_FL_CHAN = 0;
+const uint8_t WHEEL_FL_DIR = 3;
 // Front Right wheel
-const uint8_t WHEEL_FR_PWM = 4;
-const uint8_t WHEEL_FR_DIR = 3;
+const uint8_t WHEEL_FR_PWM = 5;
+const uint8_t WHEEL_FR_CHAN = 1;
+const uint8_t WHEEL_FR_DIR = 6;
 // Rear Left wheel
-const uint8_t WHEEL_RL_PWM = 7;
-const uint8_t WHEEL_RL_DIR = 9;
+const uint8_t WHEEL_RL_PWM = 2;
+const uint8_t WHEEL_RL_CHAN = 2;
+const uint8_t WHEEL_RL_DIR = 1;
 // Rear Right wheel
-const uint8_t WHEEL_RR_PWM = 2;
-const uint8_t WHEEL_RR_DIR = 1;
+const uint8_t WHEEL_RR_PWM = 7;
+const uint8_t WHEEL_RR_CHAN = 3;
+const uint8_t WHEEL_RR_DIR = 9;
 
-const uint8_t PWM_RESOLUTION = 16; // Resolution of PWM to control speed wheels
+const uint8_t PWM_RESOLUTION = 10; // Resolution of PWM to control speed wheels
 const uint32_t PWM_FREQ = 2000;    // Frequency of PWM to control speed wheels
 
 const uint8_t LED = 8; // Led pin
@@ -35,6 +39,7 @@ const char *ADVERTISE_UUID = "1a995753-23ae-43da-95ce-5372236406ed";
 // Wheel infos
 struct Wheel {
   uint8_t pwmPin;
+  uint8_t pwmChan;
   uint8_t dirPin;
 };
 
@@ -47,10 +52,10 @@ struct Wheels {
 };
 
 // Set global wheels
-const Wheels wheels = {{WHEEL_FL_PWM, WHEEL_FL_DIR},
-                       {WHEEL_FR_PWM, WHEEL_FR_DIR},
-                       {WHEEL_RL_PWM, WHEEL_RL_DIR},
-                       {WHEEL_RR_PWM, WHEEL_RR_DIR}};
+const Wheels wheels = {{WHEEL_FL_PWM, WHEEL_FL_CHAN, WHEEL_FL_DIR},
+                       {WHEEL_FR_PWM, WHEEL_FR_CHAN, WHEEL_FR_DIR},
+                       {WHEEL_RL_PWM, WHEEL_RL_CHAN, WHEEL_RL_DIR},
+                       {WHEEL_RR_PWM, WHEEL_RR_CHAN, WHEEL_RR_DIR}};
 
 // global speed and buzzer value
 float speed_x, speed_y, speed_r = 0;
@@ -70,8 +75,9 @@ void ControlWheel(Wheel wheel, float_t speed) {
   }
 
   // convert float [0, 1] to uint16_t
-  uint16_t pwmValue = (uint16_t)(speed * 65535.0f);
-  ledcWrite(wheel.pwmPin, pwmValue);
+  uint16_t pwmValue = (uint16_t)(speed * 1023.0f);
+  ledcWrite(wheel.pwmChan, pwmValue);
+  uint32_t readDuty = ledcRead(wheel.pwmChan);
 }
 
 /**
@@ -133,6 +139,18 @@ class ControlCarCallback : public NimBLECharacteristicCallbacks {
     Serial.printf("Received: x = %.3f y = %.3f r = %.3f\n\r", speed_x, speed_y,
                   speed_r);
   }
+
+  /**
+   * @brief Read value of Duty cycle.
+   *
+   * @param chr
+   */
+  void onRead(NimBLECharacteristic *chr) {
+    Serial.printf("FL: %u ", ledcRead(wheels.frontLeft.pwmChan));
+    Serial.printf("FR: %u ", ledcRead(wheels.frontRight.pwmChan));
+    Serial.printf("RL: %u ", ledcRead(wheels.rearLeft.pwmChan));
+    Serial.printf("RR: %u\n\r", ledcRead(wheels.rearRight.pwmChan));
+  }
 };
 
 /**
@@ -142,9 +160,6 @@ class ControlCarCallback : public NimBLECharacteristicCallbacks {
  */
 class ControlCarBuzCallback : public NimBLECharacteristicCallbacks {
 
-  /**
-   * @brief ControlCar with received value as '1' or '0'
-   */
   void onWrite(NimBLECharacteristic *chr) {
     std::string value = chr->getValue();
 
@@ -159,29 +174,20 @@ void setup() {
   pinMode(LED, OUTPUT);
   digitalWrite(LED, HIGH);
 
-  // Set pin mode to all pins
-  pinMode(WHEEL_FL_PWM, OUTPUT);
-  pinMode(WHEEL_FL_DIR, OUTPUT);
-  pinMode(WHEEL_FR_PWM, OUTPUT);
-  pinMode(WHEEL_FR_DIR, OUTPUT);
-  pinMode(WHEEL_RR_PWM, OUTPUT);
-  pinMode(WHEEL_RR_DIR, OUTPUT);
-  pinMode(WHEEL_RL_DIR, OUTPUT);
-  pinMode(WHEEL_RL_PWM, OUTPUT);
-
   // Set resolution and frequency to wheel's PWM
-  ledcSetup(0, PWM_FREQ, PWM_RESOLUTION);
-  ledcSetup(1, PWM_FREQ, PWM_RESOLUTION);
-  ledcSetup(2, PWM_FREQ, PWM_RESOLUTION);
-  ledcSetup(3, PWM_FREQ, PWM_RESOLUTION);
+  ledcSetup(WHEEL_FL_CHAN, PWM_FREQ, PWM_RESOLUTION);
+  ledcSetup(WHEEL_FR_CHAN, PWM_FREQ, PWM_RESOLUTION);
+  ledcSetup(WHEEL_RL_CHAN, PWM_FREQ, PWM_RESOLUTION);
+  ledcSetup(WHEEL_RR_CHAN, PWM_FREQ, PWM_RESOLUTION);
   // Set resolution and frquency to buzzer's PWM
   ledcSetup(4, 0, BUZZER_RESOLUTION);
 
   // Attach pins to PWM
-  ledcAttachPin(WHEEL_FL_PWM, 0);
-  ledcAttachPin(WHEEL_FR_PWM, 1);
-  ledcAttachPin(WHEEL_RR_PWM, 2);
-  ledcAttachPin(WHEEL_RL_PWM, 3);
+  ledcAttachPin(WHEEL_FL_PWM, WHEEL_FL_CHAN);
+  ledcAttachPin(WHEEL_FR_PWM, WHEEL_FR_CHAN);
+  ledcAttachPin(WHEEL_RL_PWM, WHEEL_RL_CHAN);
+  ledcAttachPin(WHEEL_RR_PWM, WHEEL_RR_CHAN);
+
   ledcAttachPin(BUZZER, 4);
 
   ControlWheels(wheels, speed_x, speed_y, speed_r);
@@ -200,7 +206,8 @@ void setup() {
   NimBLEService *pService = pServer->createService(SERVICE_UUID);
   // Create and set Callback to control direction and rotation of car
   NimBLECharacteristic *pCharacteristicCar = pService->createCharacteristic(
-      CHARACTERISTIC_CONTROL_UUID, NIMBLE_PROPERTY::WRITE);
+      CHARACTERISTIC_CONTROL_UUID,
+      NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
   pCharacteristicCar->setCallbacks(new ControlCarCallback());
   // Create and set Callback to control Buzzer of car
   NimBLECharacteristic *pCharacteristicBuz = pService->createCharacteristic(
@@ -216,4 +223,4 @@ void setup() {
   pAdvertising->start();
 }
 
-void loop() {}
+void loop() { delay(10000); }
