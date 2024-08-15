@@ -1,29 +1,36 @@
-#include "HWCDC.h"
 #include "NimBLEDevice.h"
 #include <Arduino.h>
 
 // Defining the pins to control the wheels
 
 // Front Left wheel
-#define WHEEL_FL_PWM 5
-#define WHEEL_FL_DIR 6
+const uint8_t WHEEL_FL_PWM = 5;
+const uint8_t WHEEL_FL_DIR = 6;
 // Front Right wheel
-#define WHEEL_FR_PWM 4
-#define WHEEL_FR_DIR 3
+const uint8_t WHEEL_FR_PWM = 4;
+const uint8_t WHEEL_FR_DIR = 3;
 // Rear Left wheel
-#define WHEEL_RL_PWM 7
-#define WHEEL_RL_DIR 10
+const uint8_t WHEEL_RL_PWM = 7;
+const uint8_t WHEEL_RL_DIR = 9;
 // Rear Right wheel
-#define WHEEL_RR_PWM 2
-#define WHEEL_RR_DIR 1
+const uint8_t WHEEL_RR_PWM = 2;
+const uint8_t WHEEL_RR_DIR = 1;
 
-#define LED 8 // Led pin
+const uint8_t PWM_RESOLUTION = 16; // Resolution of PWM to control speed wheels
+const uint32_t PWM_FREQ = 2000;    // Frequency of PWM to control speed wheels
+
+const uint8_t LED = 8; // Led pin
+
+// Define Buzzer Characteristics
+const uint8_t BUZZER = 10;           // Pin
+const uint8_t BUZZER_RESOLUTION = 8; // Resolução do buzzer
 
 // UUIDs
-
-#define SERVICE_UUID "014dd1c0-9dde-4907-8c31-e7d6b7a77ddb"
-#define CHARACTERISTIC_UUID "c7be25a0-d82d-44e0-8155-3cbac410e2ed"
-#define ADVERTISE_UUID "1a995753-23ae-43da-95ce-5372236406ed"
+const char *SERVICE_UUID = "014dd1c0-9dde-4907-8c31-e7d6b7a77ddb";
+const char *CHARACTERISTIC_CONTROL_UUID =
+    "c7be25a0-d82d-44e0-8155-3cbac410e2ed";
+const char *CHARACTERISTIC_BUZZER_UUID = "1e29d664-837a-42cd-8051-451e8985c08b";
+const char *ADVERTISE_UUID = "1a995753-23ae-43da-95ce-5372236406ed";
 
 // Wheel infos
 struct Wheel {
@@ -39,8 +46,14 @@ struct Wheels {
   Wheel rearRight;
 };
 
-// global speed state
-float x, y, r = 0;
+// Set global wheels
+const Wheels wheels = {{WHEEL_FL_PWM, WHEEL_FL_DIR},
+                       {WHEEL_FR_PWM, WHEEL_FR_DIR},
+                       {WHEEL_RL_PWM, WHEEL_RL_DIR},
+                       {WHEEL_RR_PWM, WHEEL_RR_DIR}};
+
+// global speed and buzzer value
+float speed_x, speed_y, speed_r = 0;
 
 /**
  * @brief set pwm to control speed between -100 and 100 and direction.
@@ -57,35 +70,23 @@ void ControlWheel(Wheel wheel, float_t speed) {
   }
 
   // convert float [0, 1] to uint16_t
-  uint16_t pwmValue = trunc(speed * 65535);
+  uint16_t pwmValue = (uint16_t)(speed * 65535.0f);
   ledcWrite(wheel.pwmPin, pwmValue);
 }
 
 /**
- * @brief Calculate and apply control to wheels
+ * @brief Calculate and apply control to wheels set speed_x, speed_y or speed_r
  *
  * @param wheels struct with all wheels
- * @param speed_x + speed_y between -1 and 1
+ * @param speed_x + speed_y between in [-1, 1] if speed_r = 0
+ * @param speed_r  between in [-1, 1] if speed_x = speed_y = 0
  */
-void ControlDir(Wheels wheels, float speed_x, float speed_y) {
+void ControlWheels(Wheels wheels, float speed_x, float speed_y, float speed_r) {
 
-  ControlWheel(wheels.frontLeft, speed_x - speed_y);
-  ControlWheel(wheels.frontRight, speed_x + speed_y);
-  ControlWheel(wheels.rearLeft, speed_x + speed_y);
-  ControlWheel(wheels.rearRight, speed_x - speed_y);
-}
-
-/**
- * @brief Control rotation the car
- *
- * @param wheels struct with all wheels
- * @param speed_rot speed to ratate value [-1, 1]
- */
-void ControlRot(Wheels wheels, float speed_rot) {
-  ControlWheel(wheels.frontLeft, -speed_rot);
-  ControlWheel(wheels.frontRight, speed_rot);
-  ControlWheel(wheels.rearLeft, -speed_rot);
-  ControlWheel(wheels.rearRight, speed_rot);
+  ControlWheel(wheels.frontLeft, speed_x - speed_y - speed_r);
+  ControlWheel(wheels.frontRight, speed_x + speed_y + speed_r);
+  ControlWheel(wheels.rearLeft, speed_x + speed_y - speed_r);
+  ControlWheel(wheels.rearRight, speed_x - speed_y + speed_r);
 }
 
 class ServerCallback : public NimBLEServerCallbacks {
@@ -94,17 +95,20 @@ class ServerCallback : public NimBLEServerCallbacks {
     Serial.println("Client Connected");
 
     digitalWrite(LED, LOW);
-    // Buzzer sinalize
+
+    // Buzzer Sinalize
 
     pServer->startAdvertising();
   }
 
   void onDisconnect(NimBLEServer *pServer) {
+    ControlWheels(wheels, 0, 0, 0);
     Serial.println("Client Disconnected");
 
     digitalWrite(LED, HIGH);
-    // Buzzer sinalize
-    //
+
+    // Buzzer Sinalize
+
     pServer->startAdvertising();
   }
 };
@@ -122,20 +126,31 @@ class ControlCarCallback : public NimBLECharacteristicCallbacks {
   void onWrite(NimBLECharacteristic *chr) {
     std::string value = chr->getValue();
 
-    sscanf(value.c_str(), "x%fy%fr%f", &x, &y, &r);
+    sscanf(value.c_str(), "x%fy%fr%f", &speed_x, &speed_y, &speed_r);
 
-    ControlDir({{WHEEL_FL_PWM, WHEEL_FL_DIR},
-                {WHEEL_FR_PWM, WHEEL_FR_DIR},
-                {WHEEL_RL_PWM, WHEEL_RL_DIR},
-                {WHEEL_RR_PWM, WHEEL_RR_DIR}},
-               x, y);
-    ControlRot({{WHEEL_FL_PWM, WHEEL_FL_DIR},
-                {WHEEL_FR_PWM, WHEEL_FR_DIR},
-                {WHEEL_RL_PWM, WHEEL_RL_DIR},
-                {WHEEL_RR_PWM, WHEEL_RR_DIR}},
-               r);
+    ControlWheels(wheels, speed_x, speed_y, speed_r);
 
-    Serial.printf("x:%.3f y:%.3f r:%.3f\n", x, y, r);
+    Serial.printf("Received: x = %.3f y = %.3f r = %.3f\n\r", speed_x, speed_y,
+                  speed_r);
+  }
+};
+
+/**
+ * @class ControlCarBuzCallback
+ * @brief Class to callback that will control the buzzer of car
+ *
+ */
+class ControlCarBuzCallback : public NimBLECharacteristicCallbacks {
+
+  /**
+   * @brief ControlCar with received value as '1' or '0'
+   */
+  void onWrite(NimBLECharacteristic *chr) {
+    std::string value = chr->getValue();
+
+    // buzzer Sinalize with diferents tons
+
+    Serial.printf("Received buz = %s\n\r", value == "1" ? "true" : "false");
   }
 };
 
@@ -154,41 +169,48 @@ void setup() {
   pinMode(WHEEL_RL_DIR, OUTPUT);
   pinMode(WHEEL_RL_PWM, OUTPUT);
 
-  // Set resolution to PWM
-  ledcSetup(0, 20000, 16);
-  ledcSetup(1, 20000, 16);
-  ledcSetup(2, 20000, 16);
-  ledcSetup(3, 20000, 16);
+  // Set resolution and frequency to wheel's PWM
+  ledcSetup(0, PWM_FREQ, PWM_RESOLUTION);
+  ledcSetup(1, PWM_FREQ, PWM_RESOLUTION);
+  ledcSetup(2, PWM_FREQ, PWM_RESOLUTION);
+  ledcSetup(3, PWM_FREQ, PWM_RESOLUTION);
+  // Set resolution and frquency to buzzer's PWM
+  ledcSetup(4, 0, BUZZER_RESOLUTION);
 
   // Attach pins to PWM
   ledcAttachPin(WHEEL_FL_PWM, 0);
   ledcAttachPin(WHEEL_FR_PWM, 1);
   ledcAttachPin(WHEEL_RR_PWM, 2);
   ledcAttachPin(WHEEL_RL_PWM, 3);
+  ledcAttachPin(BUZZER, 4);
 
-  const Wheels wheels = {{WHEEL_FL_PWM, WHEEL_FL_DIR},
-                         {WHEEL_FR_PWM, WHEEL_FR_DIR},
-                         {WHEEL_RL_PWM, WHEEL_RL_DIR},
-                         {WHEEL_RR_PWM, WHEEL_RR_DIR}};
-
-  ControlDir(wheels, x, y);
-  ControlRot(wheels, r);
+  ControlWheels(wheels, speed_x, speed_y, speed_r);
 
   // Start serial
   Serial.begin(115200);
 
+  // Set Bluetooth Name
   NimBLEDevice::init("RamoCar");
 
+  // Create end set Callback to Server
   NimBLEServer *pServer = NimBLEDevice::createServer();
   pServer->setCallbacks(new ServerCallback());
 
+  // Create Service and Characteristic to control car
   NimBLEService *pService = pServer->createService(SERVICE_UUID);
-  NimBLECharacteristic *pCharacteristic = pService->createCharacteristic(
-      CHARACTERISTIC_UUID, NIMBLE_PROPERTY::WRITE);
-  pCharacteristic->setCallbacks(new ControlCarCallback());
+  // Create and set Callback to control direction and rotation of car
+  NimBLECharacteristic *pCharacteristicCar = pService->createCharacteristic(
+      CHARACTERISTIC_CONTROL_UUID, NIMBLE_PROPERTY::WRITE);
+  pCharacteristicCar->setCallbacks(new ControlCarCallback());
+  // Create and set Callback to control Buzzer of car
+  NimBLECharacteristic *pCharacteristicBuz = pService->createCharacteristic(
+      CHARACTERISTIC_BUZZER_UUID, NIMBLE_PROPERTY::WRITE);
+  pCharacteristicBuz->setCallbacks(new ControlCarBuzCallback());
 
+  // Start service
   pService->start();
 
+  // Create and set UUI to Advertising
   NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
   pAdvertising->addServiceUUID(ADVERTISE_UUID);
   pAdvertising->start();
