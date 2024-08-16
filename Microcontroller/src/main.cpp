@@ -1,4 +1,3 @@
-#include "NimBLECharacteristic.h"
 #include "NimBLEDevice.h"
 #include <Arduino.h>
 // Defining the pins to control the wheels
@@ -31,9 +30,8 @@ const uint8_t BUZZER_RESOLUTION = 8; // Resolução do buzzer
 
 // UUIDs
 const char *SERVICE_UUID = "014dd1c0-9dde-4907-8c31-e7d6b7a77ddb";
-const char *CHARACTERISTIC_CONTROL_UUID =
-    "c7be25a0-d82d-44e0-8155-3cbac410e2ed";
-const char *CHARACTERISTIC_BUZZER_UUID = "1e29d664-837a-42cd-8051-451e8985c08b";
+const char *CHARACTERISTIC_CON_UUID = "c7be25a0-d82d-44e0-8155-3cbac410e2ed";
+const char *CHARACTERISTIC_BUZ_UUID = "1e29d664-837a-42cd-8051-451e8985c08b";
 const char *ADVERTISE_UUID = "1a995753-23ae-43da-95ce-5372236406ed";
 
 // Wheel infos
@@ -69,6 +67,7 @@ float speed_x, speed_y, speed_r = 0;
 void ControlWheel(Wheel wheel, float_t speed) {
   if (speed > 0) {
     digitalWrite(wheel.dirPin, HIGH);
+    speed = 1 - speed; // invert Duty cycle
   } else {
     digitalWrite(wheel.dirPin, LOW);
     speed = -speed;
@@ -206,12 +205,11 @@ void setup() {
   NimBLEService *pService = pServer->createService(SERVICE_UUID);
   // Create and set Callback to control direction and rotation of car
   NimBLECharacteristic *pCharacteristicCar = pService->createCharacteristic(
-      CHARACTERISTIC_CONTROL_UUID,
-      NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
+      CHARACTERISTIC_CON_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
   pCharacteristicCar->setCallbacks(new ControlCarCallback());
   // Create and set Callback to control Buzzer of car
   NimBLECharacteristic *pCharacteristicBuz = pService->createCharacteristic(
-      CHARACTERISTIC_BUZZER_UUID, NIMBLE_PROPERTY::WRITE);
+      CHARACTERISTIC_BUZ_UUID, NIMBLE_PROPERTY::WRITE);
   pCharacteristicBuz->setCallbacks(new ControlCarBuzCallback());
 
   // Start service
