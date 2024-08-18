@@ -1,6 +1,7 @@
 #include "NimBLEDevice.h"
 #include <Arduino.h>
-// Defining the pins to control the wheels
+
+// Defining the pins and channels to control the wheels
 
 // Front Left wheel
 const uint8_t WHEEL_FL_PWM = 4;
@@ -75,8 +76,8 @@ void ControlWheel(Wheel wheel, float_t speed) {
 
   // convert float [0, 1] to uint16_t
   uint16_t pwmValue = (uint16_t)(speed * 1023.0f);
+  // Define PWM on channel
   ledcWrite(wheel.pwmChan, pwmValue);
-  uint32_t readDuty = ledcRead(wheel.pwmChan);
 }
 
 /**
@@ -140,15 +141,31 @@ class ControlCarCallback : public NimBLECharacteristicCallbacks {
   }
 
   /**
-   * @brief Read value of Duty cycle.
+   * @brief Read value state of wheels.
    *
    * @param chr
    */
   void onRead(NimBLECharacteristic *chr) {
-    Serial.printf("FL: %u ", ledcRead(wheels.frontLeft.pwmChan));
-    Serial.printf("FR: %u ", ledcRead(wheels.frontRight.pwmChan));
-    Serial.printf("RL: %u ", ledcRead(wheels.rearLeft.pwmChan));
-    Serial.printf("RR: %u\n\r", ledcRead(wheels.rearRight.pwmChan));
+    Serial.printf(
+        "FL: PWMpin = %d; Duty cycle: %u; DIRpin = %d; level = %s\n\r",
+        wheels.frontLeft.pwmPin, ledcRead(wheels.frontLeft.pwmChan),
+        wheels.frontLeft.dirPin,
+        digitalRead(wheels.frontLeft.dirPin) ? "HIGH" : "LOW");
+    Serial.printf(
+        "FR: PWMpin = %d; Duty cycle: %u; DIRpin = %d; level = %s\n\r",
+        wheels.frontRight.pwmPin, ledcRead(wheels.frontRight.pwmChan),
+        wheels.frontRight.dirPin,
+        digitalRead(wheels.frontRight.dirPin) ? "HIGH" : "LOW");
+    Serial.printf(
+        "RL: PWMpin = %d; Duty cycle: %u; DIRpin = %d; level = %s\n\r",
+        wheels.rearLeft.pwmPin, ledcRead(wheels.rearLeft.pwmChan),
+        wheels.rearLeft.dirPin,
+        digitalRead(wheels.rearLeft.dirPin) ? "HIGH" : "LOW");
+    Serial.printf(
+        "RR: PWMpin = %d; Duty cycle: %u; DIRpin = %d; level = %s\n\r",
+        wheels.rearRight.pwmPin, ledcRead(wheels.frontLeft.pwmChan),
+        wheels.rearRight.dirPin,
+        digitalRead(wheels.rearRight.dirPin) ? "HIGH" : "LOW");
   }
 };
 
@@ -172,6 +189,12 @@ void setup() {
   // Turn off led
   pinMode(LED, OUTPUT);
   digitalWrite(LED, HIGH);
+
+  // Set direction pin
+  pinMode(WHEEL_FL_DIR, OUTPUT);
+  pinMode(WHEEL_FR_DIR, OUTPUT);
+  pinMode(WHEEL_RL_DIR, OUTPUT);
+  pinMode(WHEEL_RR_DIR, OUTPUT);
 
   // Set resolution and frequency to wheel's PWM
   ledcSetup(WHEEL_FL_CHAN, PWM_FREQ, PWM_RESOLUTION);
