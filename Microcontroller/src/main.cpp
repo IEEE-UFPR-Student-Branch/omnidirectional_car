@@ -1,5 +1,7 @@
 #include "NimBLEDevice.h"
+#include "esp32-hal-ledc.h"
 #include <Arduino.h>
+#include <sys/_stdint.h>
 
 // Defining the pins and channels to control the wheels
 
@@ -101,8 +103,13 @@ class ServerCallback : public NimBLEServerCallbacks {
     Serial.println("Client Connected");
 
     digitalWrite(LED, LOW);
-
-    // Buzzer Sinalize
+    ledcWriteNote(4, NOTE_C, 4);
+    delay(200);
+    ledcWriteNote(4, NOTE_E, 4);
+    delay(200);
+    ledcWriteNote(4, NOTE_G, 4);
+    delay(200);
+    ledcWrite(4, 0);
 
     pServer->startAdvertising();
   }
@@ -113,7 +120,17 @@ class ServerCallback : public NimBLEServerCallbacks {
 
     digitalWrite(LED, HIGH);
 
-    // Buzzer Sinalize
+    ledcWriteNote(4, NOTE_G, 4);
+    delay(150);
+    ledcWriteNote(4, NOTE_E, 4);
+    delay(150);
+    ledcWriteNote(4, NOTE_C, 4);
+    delay(150);
+    ledcWrite(4, 0);
+
+    ledcWriteNote(4, NOTE_C, 4);
+    delay(500);
+    ledcWrite(4, 0);
 
     pServer->startAdvertising();
   }
