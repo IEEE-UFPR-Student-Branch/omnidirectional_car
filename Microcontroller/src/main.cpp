@@ -108,7 +108,7 @@ class ServerCallback : public NimBLEServerCallbacks {
   }
 
   void onDisconnect(NimBLEServer *pServer) {
-    ControlWheels(wheels, 0, 0, 0);
+    ControlWheels(wheels, 0, 0, 0); // Stop Car
     Serial.println("Client Disconnected");
 
     digitalWrite(LED, HIGH);
@@ -163,7 +163,7 @@ class ControlCarCallback : public NimBLECharacteristicCallbacks {
         digitalRead(wheels.rearLeft.dirPin) ? "HIGH" : "LOW");
     Serial.printf(
         "RR: PWMpin = %d; Duty cycle: %u; DIRpin = %d; level = %s\n\r",
-        wheels.rearRight.pwmPin, ledcRead(wheels.frontLeft.pwmChan),
+        wheels.rearRight.pwmPin, ledcRead(wheels.rearRight.pwmChan),
         wheels.rearRight.dirPin,
         digitalRead(wheels.rearRight.dirPin) ? "HIGH" : "LOW");
   }
