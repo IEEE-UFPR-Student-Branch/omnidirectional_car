@@ -1,40 +1,49 @@
+#include "HWCDC.h"
 #include "NimBLEDevice.h"
+#include "esp32-hal-ledc.h"
 #include <Arduino.h>
+#include <cstdio>
+#include <sys/_stdint.h>
 
-// Defining the pins to control the wheels
+// Defining the pins and channels to control the wheels
 
 // Front Left wheel
-const uint8_t WHEEL_FL_PWM = 5;
-const uint8_t WHEEL_FL_DIR = 6;
+const uint8_t WHEEL_FL_PWM = 4;
+const uint8_t WHEEL_FL_CHAN = 0;
+const uint8_t WHEEL_FL_DIR = 3;
 // Front Right wheel
-const uint8_t WHEEL_FR_PWM = 4;
-const uint8_t WHEEL_FR_DIR = 3;
+const uint8_t WHEEL_FR_PWM = 5;
+const uint8_t WHEEL_FR_CHAN = 1;
+const uint8_t WHEEL_FR_DIR = 6;
 // Rear Left wheel
-const uint8_t WHEEL_RL_PWM = 7;
-const uint8_t WHEEL_RL_DIR = 9;
+const uint8_t WHEEL_RL_PWM = 2;
+const uint8_t WHEEL_RL_CHAN = 2;
+const uint8_t WHEEL_RL_DIR = 1;
 // Rear Right wheel
-const uint8_t WHEEL_RR_PWM = 2;
-const uint8_t WHEEL_RR_DIR = 1;
+const uint8_t WHEEL_RR_PWM = 7;
+const uint8_t WHEEL_RR_CHAN = 3;
+const uint8_t WHEEL_RR_DIR = 9;
 
-const uint8_t PWM_RESOLUTION = 16; // Resolution of PWM to control speed wheels
+const uint8_t PWM_RESOLUTION = 10; // Resolution of PWM to control speed wheels
 const uint32_t PWM_FREQ = 2000;    // Frequency of PWM to control speed wheels
 
 const uint8_t LED = 8; // Led pin
 
 // Define Buzzer Characteristics
-const uint8_t BUZZER = 10;           // Pin
+const uint8_t BUZZER_PIN = 10;       // Pin
 const uint8_t BUZZER_RESOLUTION = 8; // Resolução do buzzer
+const uint8_t BUZZER_CHANNEL = 4;    // channel of buzzer
 
 // UUIDs
 const char *SERVICE_UUID = "014dd1c0-9dde-4907-8c31-e7d6b7a77ddb";
-const char *CHARACTERISTIC_CONTROL_UUID =
-    "c7be25a0-d82d-44e0-8155-3cbac410e2ed";
-const char *CHARACTERISTIC_BUZZER_UUID = "1e29d664-837a-42cd-8051-451e8985c08b";
+const char *CHARACTERISTIC_CON_UUID = "c7be25a0-d82d-44e0-8155-3cbac410e2ed";
+const char *CHARACTERISTIC_BUZ_UUID = "1e29d664-837a-42cd-8051-451e8985c08b";
 const char *ADVERTISE_UUID = "1a995753-23ae-43da-95ce-5372236406ed";
 
 // Wheel infos
 struct Wheel {
   uint8_t pwmPin;
+  uint8_t pwmChan;
   uint8_t dirPin;
 };
 
@@ -47,13 +56,17 @@ struct Wheels {
 };
 
 // Set global wheels
-const Wheels wheels = {{WHEEL_FL_PWM, WHEEL_FL_DIR},
-                       {WHEEL_FR_PWM, WHEEL_FR_DIR},
-                       {WHEEL_RL_PWM, WHEEL_RL_DIR},
-                       {WHEEL_RR_PWM, WHEEL_RR_DIR}};
+const Wheels wheels = {{WHEEL_FL_PWM, WHEEL_FL_CHAN, WHEEL_FL_DIR},
+                       {WHEEL_FR_PWM, WHEEL_FR_CHAN, WHEEL_FR_DIR},
+                       {WHEEL_RL_PWM, WHEEL_RL_CHAN, WHEEL_RL_DIR},
+                       {WHEEL_RR_PWM, WHEEL_RR_CHAN, WHEEL_RR_DIR}};
 
-// global speed and buzzer value
-float speed_x, speed_y, speed_r = 0;
+// Global speed and buzzer value
+float speedX, speedY, speedR = 0;
+
+// Global buzer tone and octave
+note_t note;
+uint8_t octave;
 
 /**
  * @brief set pwm to control speed between -100 and 100 and direction.
@@ -64,29 +77,48 @@ float speed_x, speed_y, speed_r = 0;
 void ControlWheel(Wheel wheel, float_t speed) {
   if (speed > 0) {
     digitalWrite(wheel.dirPin, HIGH);
+    speed = 1 - speed; // invert Duty cycle
   } else {
     digitalWrite(wheel.dirPin, LOW);
     speed = -speed;
   }
 
   // convert float [0, 1] to uint16_t
-  uint16_t pwmValue = (uint16_t)(speed * 65535.0f);
-  ledcWrite(wheel.pwmPin, pwmValue);
+  uint16_t pwmValue = (uint16_t)(speed * 1023.0f);
+  // Define PWM on channel
+  ledcWrite(wheel.pwmChan, pwmValue);
 }
 
 /**
  * @brief Calculate and apply control to wheels set speed_x, speed_y or speed_r
  *
  * @param wheels struct with all wheels
- * @param speed_x + speed_y between in [-1, 1] if speed_r = 0
- * @param speed_r  between in [-1, 1] if speed_x = speed_y = 0
+ * @param speed_x speed on x axis between -1 and 1
+ * @param speed_y speed on y axis between -1 and 1
+ * @param speed_r speed on rotation between -1 and 1
  */
-void ControlWheels(Wheels wheels, float speed_x, float speed_y, float speed_r) {
+void ControlWheels(Wheels wheels, float speedX, float speedY, float speedR) {
+  float normalizationFactor = 1;
 
-  ControlWheel(wheels.frontLeft, speed_x - speed_y - speed_r);
-  ControlWheel(wheels.frontRight, speed_x + speed_y + speed_r);
-  ControlWheel(wheels.rearLeft, speed_x + speed_y - speed_r);
-  ControlWheel(wheels.rearRight, speed_x - speed_y + speed_r);
+  // Calculate resultant velocity to each wheel. {FL, FR, RL, RR}
+  float resultantVelocity[4] = {
+      speedX - speedY - speedR, speedX + speedY + speedR,
+      speedX + speedY - speedR, speedX - speedY + speedR};
+
+  // Find extreame value to normalize it.
+  for (uint8_t i = 0; i < 4; i++) {
+    if (resultantVelocity[i] > normalizationFactor) {
+      normalizationFactor = resultantVelocity[i];
+    } else if (resultantVelocity[i] < -normalizationFactor) {
+      normalizationFactor = -resultantVelocity[i];
+    }
+  }
+
+  // Send normalized speeds based the extreme value.
+  ControlWheel(wheels.frontLeft, resultantVelocity[0] / normalizationFactor);
+  ControlWheel(wheels.frontRight, resultantVelocity[1] / normalizationFactor);
+  ControlWheel(wheels.rearLeft, resultantVelocity[2] / normalizationFactor);
+  ControlWheel(wheels.rearRight, resultantVelocity[3] / normalizationFactor);
 }
 
 class ServerCallback : public NimBLEServerCallbacks {
@@ -96,18 +128,32 @@ class ServerCallback : public NimBLEServerCallbacks {
 
     digitalWrite(LED, LOW);
 
-    // Buzzer Sinalize
+    // Sound alert when has connection with client
+    ledcWriteNote(BUZZER_CHANNEL, NOTE_C, 4);
+    delay(200);
+    ledcWriteNote(BUZZER_CHANNEL, NOTE_E, 4);
+    delay(200);
+    ledcWriteNote(BUZZER_CHANNEL, NOTE_G, 4);
+    delay(200);
+    ledcWrite(BUZZER_CHANNEL, 0);
 
     pServer->startAdvertising();
   }
 
   void onDisconnect(NimBLEServer *pServer) {
-    ControlWheels(wheels, 0, 0, 0);
+    ControlWheels(wheels, 0, 0, 0); // Stop Car
     Serial.println("Client Disconnected");
 
     digitalWrite(LED, HIGH);
 
-    // Buzzer Sinalize
+    // Sound alert when has disconnection with client
+    ledcWriteNote(BUZZER_CHANNEL, NOTE_G, 4);
+    delay(200);
+    ledcWriteNote(BUZZER_CHANNEL, NOTE_E, 4);
+    delay(200);
+    ledcWriteNote(BUZZER_CHANNEL, NOTE_C, 4);
+    delay(200);
+    ledcWrite(BUZZER_CHANNEL, 0);
 
     pServer->startAdvertising();
   }
@@ -126,12 +172,40 @@ class ControlCarCallback : public NimBLECharacteristicCallbacks {
   void onWrite(NimBLECharacteristic *chr) {
     std::string value = chr->getValue();
 
-    sscanf(value.c_str(), "x%fy%fr%f", &speed_x, &speed_y, &speed_r);
+    sscanf(value.c_str(), "x%fy%fr%f", &speedX, &speedY, &speedR);
 
-    ControlWheels(wheels, speed_x, speed_y, speed_r);
+    ControlWheels(wheels, speedX, speedY, speedR);
 
-    Serial.printf("Received: x = %.3f y = %.3f r = %.3f\n\r", speed_x, speed_y,
-                  speed_r);
+    Serial.printf("Received: x = %.3f y = %.3f r = %.3f\n\r", speedX, speedY,
+                  speedR);
+  }
+
+  /**
+   * @brief Read value state of wheels.
+   *
+   * @param chr
+   */
+  void onRead(NimBLECharacteristic *chr) {
+    Serial.printf(
+        "FL: PWMpin = %d; Duty cycle: %u; DIRpin = %d; level = %s\n\r",
+        wheels.frontLeft.pwmPin, ledcRead(wheels.frontLeft.pwmChan),
+        wheels.frontLeft.dirPin,
+        digitalRead(wheels.frontLeft.dirPin) ? "HIGH" : "LOW");
+    Serial.printf(
+        "FR: PWMpin = %d; Duty cycle: %u; DIRpin = %d; level = %s\n\r",
+        wheels.frontRight.pwmPin, ledcRead(wheels.frontRight.pwmChan),
+        wheels.frontRight.dirPin,
+        digitalRead(wheels.frontRight.dirPin) ? "HIGH" : "LOW");
+    Serial.printf(
+        "RL: PWMpin = %d; Duty cycle: %u; DIRpin = %d; level = %s\n\r",
+        wheels.rearLeft.pwmPin, ledcRead(wheels.rearLeft.pwmChan),
+        wheels.rearLeft.dirPin,
+        digitalRead(wheels.rearLeft.dirPin) ? "HIGH" : "LOW");
+    Serial.printf(
+        "RR: PWMpin = %d; Duty cycle: %u; DIRpin = %d; level = %s\n\r",
+        wheels.rearRight.pwmPin, ledcRead(wheels.rearRight.pwmChan),
+        wheels.rearRight.dirPin,
+        digitalRead(wheels.rearRight.dirPin) ? "HIGH" : "LOW");
   }
 };
 
@@ -142,15 +216,49 @@ class ControlCarCallback : public NimBLECharacteristicCallbacks {
  */
 class ControlCarBuzCallback : public NimBLECharacteristicCallbacks {
 
-  /**
-   * @brief ControlCar with received value as '1' or '0'
-   */
   void onWrite(NimBLECharacteristic *chr) {
-    std::string value = chr->getValue();
+    std::string value = chr->getValue().c_str();
 
-    // buzzer Sinalize with diferents tons
-
-    Serial.printf("Received buz = %s\n\r", value == "1" ? "true" : "false");
+    switch (value[0]) {
+    case 'C':
+      ledcWriteNote(BUZZER_CHANNEL, NOTE_C, value[1] - '0');
+      break;
+    case 'c':
+      ledcWriteNote(BUZZER_CHANNEL, NOTE_Cs, value[1] - '0');
+      break;
+    case 'D':
+      ledcWriteNote(BUZZER_CHANNEL, NOTE_D, value[1] - '0');
+      break;
+    case 'E':
+      ledcWriteNote(BUZZER_CHANNEL, NOTE_Eb, value[1] - '0');
+      break;
+    case 'e':
+      ledcWriteNote(BUZZER_CHANNEL, NOTE_E, value[1] - '0');
+      break;
+    case 'F':
+      ledcWriteNote(BUZZER_CHANNEL, NOTE_F, value[1] - '0');
+      break;
+    case 'f':
+      ledcWriteNote(BUZZER_CHANNEL, NOTE_Fs, value[1] - '0');
+      break;
+    case 'G':
+      ledcWriteNote(BUZZER_CHANNEL, NOTE_G, value[1] - '0');
+      break;
+    case 'g':
+      ledcWriteNote(BUZZER_CHANNEL, NOTE_Gs, value[1] - '0');
+      break;
+    case 'A':
+      ledcWriteNote(BUZZER_CHANNEL, NOTE_A, value[1] - '0');
+      break;
+    case 'B':
+      ledcWriteNote(BUZZER_CHANNEL, NOTE_Bb, value[1] - '0');
+      break;
+    case 'b':
+      ledcWriteNote(BUZZER_CHANNEL, NOTE_B, value[1] - '0');
+      break;
+    default:
+      ledcWrite(BUZZER_CHANNEL, 0);
+    }
   }
 };
 
@@ -159,32 +267,29 @@ void setup() {
   pinMode(LED, OUTPUT);
   digitalWrite(LED, HIGH);
 
-  // Set pin mode to all pins
-  pinMode(WHEEL_FL_PWM, OUTPUT);
+  // Set direction pin
   pinMode(WHEEL_FL_DIR, OUTPUT);
-  pinMode(WHEEL_FR_PWM, OUTPUT);
   pinMode(WHEEL_FR_DIR, OUTPUT);
-  pinMode(WHEEL_RR_PWM, OUTPUT);
-  pinMode(WHEEL_RR_DIR, OUTPUT);
   pinMode(WHEEL_RL_DIR, OUTPUT);
-  pinMode(WHEEL_RL_PWM, OUTPUT);
+  pinMode(WHEEL_RR_DIR, OUTPUT);
 
   // Set resolution and frequency to wheel's PWM
-  ledcSetup(0, PWM_FREQ, PWM_RESOLUTION);
-  ledcSetup(1, PWM_FREQ, PWM_RESOLUTION);
-  ledcSetup(2, PWM_FREQ, PWM_RESOLUTION);
-  ledcSetup(3, PWM_FREQ, PWM_RESOLUTION);
+  ledcSetup(WHEEL_FL_CHAN, PWM_FREQ, PWM_RESOLUTION);
+  ledcSetup(WHEEL_FR_CHAN, PWM_FREQ, PWM_RESOLUTION);
+  ledcSetup(WHEEL_RL_CHAN, PWM_FREQ, PWM_RESOLUTION);
+  ledcSetup(WHEEL_RR_CHAN, PWM_FREQ, PWM_RESOLUTION);
   // Set resolution and frquency to buzzer's PWM
-  ledcSetup(4, 0, BUZZER_RESOLUTION);
+  ledcSetup(BUZZER_CHANNEL, 0, BUZZER_RESOLUTION);
 
   // Attach pins to PWM
-  ledcAttachPin(WHEEL_FL_PWM, 0);
-  ledcAttachPin(WHEEL_FR_PWM, 1);
-  ledcAttachPin(WHEEL_RR_PWM, 2);
-  ledcAttachPin(WHEEL_RL_PWM, 3);
-  ledcAttachPin(BUZZER, 4);
+  ledcAttachPin(WHEEL_FL_PWM, WHEEL_FL_CHAN);
+  ledcAttachPin(WHEEL_FR_PWM, WHEEL_FR_CHAN);
+  ledcAttachPin(WHEEL_RL_PWM, WHEEL_RL_CHAN);
+  ledcAttachPin(WHEEL_RR_PWM, WHEEL_RR_CHAN);
 
-  ControlWheels(wheels, speed_x, speed_y, speed_r);
+  ledcAttachPin(BUZZER_PIN, BUZZER_CHANNEL);
+
+  ControlWheels(wheels, speedX, speedY, speedR);
 
   // Start serial
   Serial.begin(115200);
@@ -200,11 +305,11 @@ void setup() {
   NimBLEService *pService = pServer->createService(SERVICE_UUID);
   // Create and set Callback to control direction and rotation of car
   NimBLECharacteristic *pCharacteristicCar = pService->createCharacteristic(
-      CHARACTERISTIC_CONTROL_UUID, NIMBLE_PROPERTY::WRITE);
+      CHARACTERISTIC_CON_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
   pCharacteristicCar->setCallbacks(new ControlCarCallback());
   // Create and set Callback to control Buzzer of car
   NimBLECharacteristic *pCharacteristicBuz = pService->createCharacteristic(
-      CHARACTERISTIC_BUZZER_UUID, NIMBLE_PROPERTY::WRITE);
+      CHARACTERISTIC_BUZ_UUID, NIMBLE_PROPERTY::WRITE);
   pCharacteristicBuz->setCallbacks(new ControlCarBuzCallback());
 
   // Start service
@@ -216,4 +321,4 @@ void setup() {
   pAdvertising->start();
 }
 
-void loop() {}
+void loop() { delay(10000); }
