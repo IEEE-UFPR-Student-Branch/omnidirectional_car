@@ -1,36 +1,32 @@
-#include "HWCDC.h"
 #include "NimBLEDevice.h"
-#include "esp32-hal-ledc.h"
 #include <Arduino.h>
-#include <cstdio>
-#include <sys/_stdint.h>
 
 // Defining the pins and channels to control the wheels
 
 // Front Left wheel
-const uint8_t WHEEL_FL_PWM = 4;
+const uint8_t WHEEL_FL_PWM = 6;
 const uint8_t WHEEL_FL_CHAN = 0;
-const uint8_t WHEEL_FL_DIR = 3;
+const uint8_t WHEEL_FL_DIR = 7;
 // Front Right wheel
-const uint8_t WHEEL_FR_PWM = 5;
+const uint8_t WHEEL_FR_PWM = 3;
 const uint8_t WHEEL_FR_CHAN = 1;
-const uint8_t WHEEL_FR_DIR = 6;
+const uint8_t WHEEL_FR_DIR = 10;
 // Rear Left wheel
-const uint8_t WHEEL_RL_PWM = 2;
+const uint8_t WHEEL_RL_PWM = 20;
 const uint8_t WHEEL_RL_CHAN = 2;
-const uint8_t WHEEL_RL_DIR = 1;
+const uint8_t WHEEL_RL_DIR = 21;
 // Rear Right wheel
-const uint8_t WHEEL_RR_PWM = 7;
+const uint8_t WHEEL_RR_PWM = 1;
 const uint8_t WHEEL_RR_CHAN = 3;
-const uint8_t WHEEL_RR_DIR = 9;
+const uint8_t WHEEL_RR_DIR = 0;
 
 const uint8_t PWM_RESOLUTION = 10; // Resolution of PWM to control speed wheels
-const uint32_t PWM_FREQ = 2000;    // Frequency of PWM to control speed wheels
+const uint32_t PWM_FREQ = 5000;    // Frequency of PWM to control speed wheels
 
 const uint8_t LED = 8; // Led pin
 
 // Define Buzzer Characteristics
-const uint8_t BUZZER_PIN = 10;       // Pin
+const uint8_t BUZZER_PIN = 9;        // Pin
 const uint8_t BUZZER_RESOLUTION = 8; // Resolução do buzzer
 const uint8_t BUZZER_CHANNEL = 4;    // channel of buzzer
 
