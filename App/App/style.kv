@@ -5,23 +5,41 @@
   orientation: "vertical"
   spacing: 40
   padding: 40
-  
-  BoxLayout: 
+
+  BoxLayout:
     orientation: "horizontal"
     size_hint: 1, .2
 
-    Button:
-      id: bluetooth_button
-      size_hint_x: .9
+    Spinner:
+      id: bluetooth_spinner
       text: "Select Bluetooth Device"
-      
-    DropDown:
-      id: bluetooth_dropdown
+      values: []
+      size_hint_x: .8
+      background_normal: ''
+      background_color: 0.05, 0.38, 0.62, 1
+      color: 1, 1, 1, 1
+      font_size: '20sp'
+      canvas.before:
+        Color:
+          rgba: 0.35, 0.62, 0.82, 1
+        Line:
+          width: 2
+          rectangle: self.x, self.y, self.width, self.height
 
     Button:
-      size_hint_x: .1
+      size_hint_x: .2
       text: "Refresh"
-    
+      background_normal: ''
+      background_color: 0.05, 0.38, 0.62, 1
+      color: 1, 1, 1, 1
+      font_size: '20sp'
+      canvas.before:
+        Color:
+          rgba: 0.35, 0.62, 0.82, 1
+        Line:
+          width: 2
+          rectangle: self.x, self.y, self.width, self.height
+
 
   BoxLayout:
     orientation: 'horizontal'
@@ -36,16 +54,35 @@
       outer_line_width: 0.01
       inner_line_width: 0.01
       pad_line_width:   0.01
-      outer_background_color: (0.75, 0.75, 0.75, 1)
-      outer_line_color:       (0.25, 0.25, 0.25, 1)
-      inner_background_color: (0.75, 0.75, 0.75, 1)
-      inner_line_color:       (0.7,  0.7,  0.7,  1)
-      pad_background_color:   (0.4,  0.4,  0.4,  1)
-      pad_line_color:         (0.35, 0.35, 0.35, 1)
-    
-    Label:
-      id: StickValues
-      text: root.stick_values
+      outer_background_color: (0.05, 0.38, 0.62, 1)
+      outer_line_color:       (0.35,  0.62,  0.82,  1)
+      inner_background_color: (0.05, 0.38, 0.62, 1)
+      inner_line_color:       (0.35,  0.62,  0.82,  1)
+      pad_background_color:   (0.999,  0.83,  0.09,  1)
+      pad_line_color:         (0.79, 0.66, 0.06, 1)
+
+    BoxLayout:
+      orientation: 'vertical'
+      pos_hint: {'center_x': 0.5, 'center_y': 0.5}
+      Label:
+        id: StickValues
+        text: root.stick_values
+        size_hint_y: None
+      Button:
+        size_hint_x: .9
+        size_hint_y: None
+        height: '40dp'
+        text: "Buzinar"
+        background_normal: ''
+        background_color: 0.05, 0.38, 0.62, 1
+        color: 1, 1, 1, 1
+        font_size: '20sp'
+        canvas.before:
+          Color:
+            rgba: 0.35, 0.62, 0.82, 1
+          Line:
+            width: 2
+            rectangle: self.x, self.y, self.width, self.height
 
     Joystick:
       id: StickRot
@@ -56,9 +93,9 @@
       outer_line_width: 0.01
       inner_line_width: 0.01
       pad_line_width:   0.01
-      outer_background_color: (0.75, 0.75, 0.75, 1)
-      outer_line_color:       (0.25, 0.25, 0.25, 1)
-      inner_background_color: (0.75, 0.75, 0.75, 1)
-      inner_line_color:       (0.7,  0.7,  0.7,  1)
-      pad_background_color:   (0.4,  0.4,  0.4,  1)
-      pad_line_color:         (0.35, 0.35, 0.35, 1)
+      outer_background_color: (0.05, 0.38, 0.62, 1)
+      outer_line_color:       (0.35,  0.62,  0.82,  1)
+      inner_background_color: (0.05, 0.38, 0.62, 1)
+      inner_line_color:       (0.35,  0.62,  0.82,  1)
+      pad_background_color:   (0.999,  0.83,  0.09,  1)
+      pad_line_color:         (0.79, 0.66, 0.06, 1)
