@@ -1,27 +1,29 @@
 #include "NimBLEDevice.h"
 #include <Arduino.h>
 
+const float MAXFACTOR = 0.7; // factor that define max value of speed
+
 // Defining the pins and channels to control the wheels
 
 // Front Left wheel
-const uint8_t WHEEL_FL_PWM = 6;
+const uint8_t WHEEL_FL_PWM = 7;
 const uint8_t WHEEL_FL_CHAN = 0;
-const uint8_t WHEEL_FL_DIR = 7;
+const uint8_t WHEEL_FL_DIR = 6;
 // Front Right wheel
-const uint8_t WHEEL_FR_PWM = 3;
+const uint8_t WHEEL_FR_PWM = 10;
 const uint8_t WHEEL_FR_CHAN = 1;
-const uint8_t WHEEL_FR_DIR = 10;
+const uint8_t WHEEL_FR_DIR = 3;
 // Rear Left wheel
-const uint8_t WHEEL_RL_PWM = 20;
+const uint8_t WHEEL_RL_PWM = 21;
 const uint8_t WHEEL_RL_CHAN = 2;
-const uint8_t WHEEL_RL_DIR = 21;
+const uint8_t WHEEL_RL_DIR = 20;
 // Rear Right wheel
-const uint8_t WHEEL_RR_PWM = 1;
+const uint8_t WHEEL_RR_PWM = 0;
 const uint8_t WHEEL_RR_CHAN = 3;
-const uint8_t WHEEL_RR_DIR = 0;
+const uint8_t WHEEL_RR_DIR = 1;
 
 const uint8_t PWM_RESOLUTION = 10; // Resolution of PWM to control speed wheels
-const uint32_t PWM_FREQ = 5000;    // Frequency of PWM to control speed wheels
+const uint32_t PWM_FREQ = 2000;    // Frequency of PWM to control speed wheels
 
 const uint8_t LED = 8; // Led pin
 
@@ -98,8 +100,8 @@ void ControlWheels(Wheels wheels, float speedX, float speedY, float speedR) {
 
   // Calculate resultant velocity to each wheel. {FL, FR, RL, RR}
   float resultantVelocity[4] = {
-      speedX - speedY - speedR, speedX + speedY + speedR,
-      speedX + speedY - speedR, speedX - speedY + speedR};
+      speedX + speedY - speedR, speedX - speedY + speedR,
+      speedX - speedY - speedR, speedX + speedY + speedR};
 
   // Find extreame value to normalize it.
   for (uint8_t i = 0; i < 4; i++) {
@@ -111,10 +113,14 @@ void ControlWheels(Wheels wheels, float speedX, float speedY, float speedR) {
   }
 
   // Send normalized speeds based the extreme value.
-  ControlWheel(wheels.frontLeft, resultantVelocity[0] / normalizationFactor);
-  ControlWheel(wheels.frontRight, resultantVelocity[1] / normalizationFactor);
-  ControlWheel(wheels.rearLeft, resultantVelocity[2] / normalizationFactor);
-  ControlWheel(wheels.rearRight, resultantVelocity[3] / normalizationFactor);
+  ControlWheel(wheels.frontLeft,
+               (resultantVelocity[0] / normalizationFactor) * MAXFACTOR);
+  ControlWheel(wheels.frontRight,
+               (resultantVelocity[1] / normalizationFactor) * MAXFACTOR);
+  ControlWheel(wheels.rearLeft,
+               (resultantVelocity[2] / normalizationFactor) * MAXFACTOR);
+  ControlWheel(wheels.rearRight,
+               (resultantVelocity[3] / normalizationFactor) * MAXFACTOR);
 }
 
 class ServerCallback : public NimBLEServerCallbacks {
